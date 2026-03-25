@@ -13,11 +13,12 @@ app.get('/', (req, res) => {
         <html lang="en">
         <head>
             <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>TESSR | Absolute QR</title>
             <style>
                 body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; margin-top: 40px; background-color: #f4f4f9; color: #333; }
-                .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); display: inline-block; text-align: left; width: 400px; }
-                input[type="text"], select, button, input[type="file"] { width: 100%; padding: 12px; margin-top: 8px; margin-bottom: 20px; border-radius: 6px; border: 1px solid #ddd; box-sizing: border-box; font-size: 14px; }
+                .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); display: inline-block; text-align: left; width: 100%; max-width: 450px; box-sizing: border-box; }
+                input[type="text"], input[type="email"], input[type="tel"], select, button, input[type="file"] { width: 100%; padding: 12px; margin-top: 8px; margin-bottom: 20px; border-radius: 6px; border: 1px solid #ddd; box-sizing: border-box; font-size: 14px; }
                 input[type="range"] { width: 100%; margin-top: 8px; margin-bottom: 20px; cursor: pointer; }
                 button { background-color: #000; color: #fff; border: none; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
                 button:hover { background-color: #333; }
@@ -25,6 +26,8 @@ app.get('/', (req, res) => {
                 .flex-row div { width: 100%; }
                 canvas { border: 1px solid #eee; border-radius: 10px; margin-top: 20px; max-width: 100%; display: none; margin-left: auto; margin-right: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
                 #downloadBtn { display: none; text-align: center; padding: 15px; background-color: #000; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 20px; }
+                .section { display: none; }
+                .active-section { display: block; }
             </style>
         </head>
         <body>
@@ -36,19 +39,53 @@ app.get('/', (req, res) => {
                 <select id="dataType" onchange="toggleInputs()">
                     <option value="url">Website URL / Plain Text</option>
                     <option value="wifi">Wi-Fi Network</option>
+                    <option value="vcard">Digital Business Card (vCard)</option>
+                    <option value="whatsapp">WhatsApp Message</option>
+                    <option value="email">Pre-Addressed Email</option>
                 </select>
 
-                <div id="urlSection">
+                <div id="urlSection" class="section active-section">
                     <label><b>Enter URL/Text:</b></label>
                     <input type="text" id="userInput" placeholder="https://...">
                 </div>
 
-                <div id="wifiSection" style="display: none;">
+                <div id="wifiSection" class="section">
                     <label><b>Network Name (SSID):</b></label>
                     <input type="text" id="wifiName" placeholder="My_Network">
                     <label><b>Password:</b></label>
                     <input type="text" id="wifiPassword" placeholder="SecretPassword">
                 </div>
+
+                <div id="vcardSection" class="section">
+                    <div class="flex-row">
+                        <div><label><b>First Name:</b></label><input type="text" id="vcardFirst" placeholder="Jane"></div>
+                        <div><label><b>Last Name:</b></label><input type="text" id="vcardLast" placeholder="Doe"></div>
+                    </div>
+                    <label><b>Company / Agency:</b></label>
+                    <input type="text" id="vcardCompany" placeholder="Lexentra">
+                    <label><b>Phone Number:</b></label>
+                    <input type="tel" id="vcardPhone" placeholder="+1234567890">
+                    <label><b>Email:</b></label>
+                    <input type="email" id="vcardEmail" placeholder="hello@lexentra.com">
+                </div>
+
+                <div id="whatsappSection" class="section">
+                    <label><b>Phone Number (with country code):</b></label>
+                    <input type="tel" id="waPhone" placeholder="919876543210">
+                    <label><b>Pre-filled Message:</b></label>
+                    <input type="text" id="waMessage" placeholder="Hi, I'd like a quote for a logo design!">
+                </div>
+
+                <div id="emailSection" class="section">
+                    <label><b>Send To (Email Address):</b></label>
+                    <input type="email" id="emailTo" placeholder="support@lexentra.com">
+                    <label><b>Subject Line:</b></label>
+                    <input type="text" id="emailSubj" placeholder="Project Inquiry">
+                    <label><b>Body Message:</b></label>
+                    <input type="text" id="emailBody" placeholder="I am interested in your services...">
+                </div>
+
+                <hr style="border: 0; height: 1px; background: #eee; margin: 25px 0;">
 
                 <div class="flex-row">
                     <div>
@@ -80,28 +117,50 @@ app.get('/', (req, res) => {
             </div>
 
             <script>
+                // A much cleaner way to switch between all our new sections
                 function toggleInputs() {
                     const type = document.getElementById("dataType").value;
-                    document.getElementById("urlSection").style.display = type === "wifi" ? "none" : "block";
-                    document.getElementById("wifiSection").style.display = type === "wifi" ? "block" : "none";
+                    const sections = ['url', 'wifi', 'vcard', 'whatsapp', 'email'];
+                    
+                    sections.forEach(sec => {
+                        document.getElementById(sec + "Section").style.display = "none";
+                    });
+                    
+                    document.getElementById(type + "Section").style.display = "block";
                 }
 
-                // Updates the text label as you drag the slider
                 function updateLabel() {
                     document.getElementById("logoSizeLabel").innerText = document.getElementById("logoSize").value + "%";
                 }
 
                 async function generateQR() {
                     const type = document.getElementById("dataType").value;
-                    let payload = document.getElementById("userInput").value;
+                    let payload = "";
                     
-                    if (type === "wifi") {
+                    // The "Brain" formatting logic for every data type
+                    if (type === "url") {
+                        payload = document.getElementById("userInput").value || "https://tessr.com";
+                    } else if (type === "wifi") {
                         const ssid = document.getElementById("wifiName").value;
                         const pass = document.getElementById("wifiPassword").value;
                         payload = \`WIFI:T:WPA;S:\${ssid};P:\${pass};;\`;
+                    } else if (type === "vcard") {
+                        const fName = document.getElementById("vcardFirst").value;
+                        const lName = document.getElementById("vcardLast").value;
+                        const comp = document.getElementById("vcardCompany").value;
+                        const phone = document.getElementById("vcardPhone").value;
+                        const email = document.getElementById("vcardEmail").value;
+                        payload = \`BEGIN:VCARD\\nVERSION:3.0\\nN:\${lName};\${fName}\\nORG:\${comp}\\nTEL:\${phone}\\nEMAIL:\${email}\\nEND:VCARD\`;
+                    } else if (type === "whatsapp") {
+                        const phone = document.getElementById("waPhone").value;
+                        const msg = encodeURIComponent(document.getElementById("waMessage").value);
+                        payload = \`https://wa.me/\${phone}?text=\${msg}\`;
+                    } else if (type === "email") {
+                        const to = document.getElementById("emailTo").value;
+                        const subj = encodeURIComponent(document.getElementById("emailSubj").value);
+                        const body = encodeURIComponent(document.getElementById("emailBody").value);
+                        payload = \`mailto:\${to}?subject=\${subj}&body=\${body}\`;
                     }
-
-                    if (!payload) payload = "https://tessr.com";
 
                     const response = await fetch('/api/generate', {
                         method: 'POST',
@@ -134,7 +193,6 @@ app.get('/', (req, res) => {
                                 const logoImg = new Image();
                                 logoImg.src = e.target.result;
                                 logoImg.onload = () => {
-                                    // NEW: Grab the slider value and convert it to a decimal (e.g., 20 becomes 0.20)
                                     const sizeMultiplier = parseInt(document.getElementById("logoSize").value) / 100;
                                     const logoSize = size * sizeMultiplier; 
                                     const center = (size - logoSize) / 2;
@@ -154,7 +212,6 @@ app.get('/', (req, res) => {
                                     ctx.fill();
                                     
                                     ctx.drawImage(logoImg, center, center, logoSize, logoSize);
-                                    
                                     showResult(canvas);
                                 }
                             }
